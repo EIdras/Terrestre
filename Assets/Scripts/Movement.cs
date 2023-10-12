@@ -1,123 +1,342 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class Movement : MonoBehaviour
 {
-    private Rigidbody2D rb;
-    private Collision collision;
-    private float speed = 10f;
-    public float wallSlideSpeed = 2f;
+    private Collision coll;
+    [HideInInspector]
+    public Rigidbody2D rb;
 
-    [Header("Jump")]
-    [Range(1, 10)]
-    public float jumpVelocity = 7;
-    public float fallMultiplier = 3f;
-    public float lowJumpMultiplier = 1.5f;
+    public LayerMask platformLayer;
+    public LayerMask playerLayer;
+    private AnimationScript anim;
 
-    [Header("Dash")]
-    public float dashSpeed = 20f;
-    public float dashDuration = 0.2f;
+    [Space]
+    [Header("Stats")]
+    public float speed = 10;
+    public float jumpForce = 50;
+    public float slideSpeed = 5;
+    public float wallJumpLerp = 10;
+    public float dashSpeed = 20;
+
+    [Space]
+    [Header("Booleans")]
+    public bool canMove;
+    public bool wallGrab;
+    public bool wallJumped;
+    public bool wallSlide;
     public bool isDashing;
-    private float dashTime;
 
-    [Header("Dash Particles")]
-    public ParticleSystem dashParticles;
+    [Space]
 
-    void Awake()
+    private bool groundTouch;
+    private bool hasDashed;
+
+    public int side = 1;
+
+    [Space]
+    [Header("Polish")]
+    public ParticleSystem dashParticle;
+    public ParticleSystem jumpParticle;
+    public ParticleSystem wallJumpParticle;
+    public ParticleSystem slideParticle;
+
+    // Start is called before the first frame update
+    void Start()
     {
+        coll = GetComponent<Collision>();
         rb = GetComponent<Rigidbody2D>();
-        collision = GetComponent<Collision>();
+        anim = GetComponentInChildren<AnimationScript>();
+        platformLayer = LayerMask.NameToLayer("Platform");
+        playerLayer = LayerMask.NameToLayer("Player");
     }
 
+    // Update is called once per frame
     void Update()
     {
-        float horizontalInput = Input.GetAxisRaw("Horizontal");
-        float verticalInput = Input.GetAxisRaw("Vertical");
+        float x = Input.GetAxis("Horizontal");
+        float y = Input.GetAxis("Vertical");
+        float xRaw = Input.GetAxisRaw("Horizontal");
+        float yRaw = Input.GetAxisRaw("Vertical");
+        Vector2 dir = new Vector2(x, y);
 
-        Walk(horizontalInput);
+        Walk(dir);
+        anim.SetHorizontalMovement(x, y, rb.velocity.y);
 
-        // Glissement sur le mur
-        if ((collision.onRightWall && horizontalInput > 0) || (collision.onLeftWall && horizontalInput < 0))
+        if (coll.onWall && Input.GetButton("Fire1") && canMove)
         {
-            // Le personnage est en train de glisser le long du mur
-            if (!collision.onGround && rb.velocity.y < 0)  // Assurez-vous qu'il ne soit pas au sol et qu'il se déplace vers le bas
+            if(side != coll.wallSide)
+                anim.Flip(side*-1);
+            wallGrab = true;
+            wallSlide = false;
+        }
+
+        if (Input.GetButtonUp("Fire1") || !coll.onWall || !canMove)
+        {
+            wallGrab = false;
+            wallSlide = false;
+        }
+
+        if (coll.onGround && !isDashing)
+        {
+            wallJumped = false;
+            GetComponent<BetterJumping>().enabled = true;
+        }
+        
+        if (wallGrab && !isDashing)
+        {
+            rb.gravityScale = 0;
+            if(x > .2f || x < -.2f)
+            rb.velocity = new Vector2(rb.velocity.x, 0);
+
+            float speedModifier = y > 0 ? .5f : 1;
+
+            rb.velocity = new Vector2(rb.velocity.x, y * (speed * speedModifier));
+        }
+        else
+        {
+            rb.gravityScale = 3;
+        }
+
+        if(coll.onWall && !coll.onGround)
+        {
+            if (x != 0 && !wallGrab)
             {
-                rb.velocity = new Vector2(rb.velocity.x, -wallSlideSpeed);
+                wallSlide = true;
+                WallSlide();
             }
         }
 
-        Jump();
+        if (!coll.onWall || coll.onGround)
+            wallSlide = false;
 
-        if (Input.GetButtonDown("Fire3") && !isDashing && (Mathf.Abs(horizontalInput) > 0 || Mathf.Abs(verticalInput) > 0))
-        {
-            StartCoroutine(Dash());
-        }
-    }
-
-
-    private void Walk(float horizontalInput)
-    {
-        if (!isDashing)
-        {
-            rb.velocity = new Vector2(horizontalInput * speed, rb.velocity.y);
-        }
-    }
-
-    private void Jump()
-    {
         if (Input.GetButtonDown("Jump"))
         {
-            if (collision.onGround) // Si le joueur est au sol
-            {
-                rb.velocity = new Vector2(rb.velocity.x, jumpVelocity);
-            }
-            else if (collision.onRightWall) // Si le joueur est en contact avec un mur à droite
-            {
-                rb.velocity = new Vector2(-jumpVelocity, jumpVelocity);
-            }
-            else if (collision.onLeftWall) // Si le joueur est en contact avec un mur à gauche
-            {
-                rb.velocity = new Vector2(jumpVelocity, jumpVelocity);
-            }
+            anim.SetTrigger("jump");
+
+            if (coll.onGround)
+                Jump(Vector2.up, false);
+            if (coll.onWall && !coll.onGround)
+                WallJump();
         }
 
-        // Pour mieux contrôler le saut en fonction de si le joueur maintient le bouton de saut ou non
-        if (rb.velocity.y < 0)
+        if (Input.GetButtonDown("Fire3") && !hasDashed)
         {
-            rb.velocity += Vector2.up * Physics2D.gravity.y * (fallMultiplier - 1) * Time.deltaTime;
+            if(xRaw != 0 || yRaw != 0)
+                Dash(xRaw, yRaw);
         }
-        else if (rb.velocity.y > 0 && !Input.GetButton("Jump"))
+
+        if (coll.onGround && !groundTouch)
         {
-            rb.velocity += Vector2.up * Physics2D.gravity.y * (lowJumpMultiplier - 1) * Time.deltaTime;
+            GroundTouch();
+            groundTouch = true;
         }
+
+        if(!coll.onGround && groundTouch)
+        {
+            groundTouch = false;
+        }
+
+        //WallParticle(y);
+
+        if (wallGrab || wallSlide || !canMove)
+            return;
+
+        if(x > 0)
+        {
+            side = 1;
+            anim.Flip(side);
+        }
+        if (x < 0)
+        {
+            side = -1;
+            anim.Flip(side);
+        }
+
+        PassThroughPlatform();
+
+    }
+
+    void GroundTouch()
+    {
+        hasDashed = false;
+        isDashing = false;
+
+        side = anim.sr.flipX ? -1 : 1;
+
+        jumpParticle.Play();
+    }
+
+    private void Dash(float x, float y)
+    {
+        /*
+        Camera.main.transform.DOComplete();
+        Camera.main.transform.DOShakePosition(.2f, .5f, 14, 90, false, true);
+        FindObjectOfType<RippleEffect>().Emit(Camera.main.WorldToViewportPoint(transform.position));
+        */
+
+        hasDashed = true;
+
+        anim.SetTrigger("dash");
+
+        rb.velocity = Vector2.zero;
+        rb.gravityScale = 0;
+        Vector2 dir = new Vector2(x, y).normalized;
+
+        // Ajustez ces facteurs selon vos besoins
+        float horizontalMultiplier = 1.0f;
+        float verticalMultiplier = 0.8f;
+
+        rb.velocity += new Vector2(dir.x * dashSpeed * horizontalMultiplier, dir.y * dashSpeed * verticalMultiplier);
+        Debug.Log("Gravity Scale during Dash: " + rb.gravityScale);
+
+        StartCoroutine(DashWait());
+    }
+
+    IEnumerator DashWait()
+    {
+        dashParticle.Play();
+        GetComponent<BetterJumping>().enabled = false;
+        wallJumped = true;
+        isDashing = true;
+
+        yield return new WaitForSeconds(.3f);
+
+        dashParticle.Stop();
+
+        // RÃ©activez la gravitÃ© Ã  la fin du dash
+        rb.gravityScale = 3;
+
+        GetComponent<BetterJumping>().enabled = true;
+        wallJumped = false;
+        isDashing = false;
     }
 
 
-
-    private IEnumerator Dash()
+    IEnumerator GroundDash()
     {
-        isDashing = true;
-        dashParticles.Play();
+        yield return new WaitForSeconds(.15f);
+        if (coll.onGround)
+            hasDashed = false;
+    }
 
-        float horizontalInput = Input.GetAxisRaw("Horizontal");
-        float verticalInput = Input.GetAxisRaw("Vertical");
-        Vector2 dashDirection = new Vector2(horizontalInput, verticalInput).normalized;
+    private void WallJump()
+    {
+        if ((side == 1 && coll.onRightWall) || side == -1 && !coll.onRightWall)
+        {
+            side *= -1;
+            anim.Flip(side);
+        }
 
-        // Sauvegarder la gravité actuelle et la mettre à 0
-        float originalGravity = rb.gravityScale;
-        rb.gravityScale = 0;
+        StopCoroutine(DisableMovement(0));
+        StartCoroutine(DisableMovement(.1f));
 
-        rb.velocity = dashDirection * dashSpeed;
+        Vector2 wallDir = coll.onRightWall ? Vector2.left : Vector2.right;
 
-        yield return new WaitForSeconds(dashDuration);
+        Jump((Vector2.up / 1.5f + wallDir / 1.5f), true);
 
-        rb.velocity = Vector2.zero;
+        wallJumped = true;
+    }
 
-        // Rétablir la gravité à sa valeur originale
-        rb.gravityScale = originalGravity;
+    private void WallSlide()
+    {
+        if(coll.wallSide != side)
+         anim.Flip(side * -1);
 
-        isDashing = false;
+        if (!canMove)
+            return;
+
+        bool pushingWall = false;
+        if((rb.velocity.x > 0 && coll.onRightWall) || (rb.velocity.x < 0 && coll.onLeftWall))
+        {
+            pushingWall = true;
+        }
+        float push = pushingWall ? 0 : rb.velocity.x;
+
+        rb.velocity = new Vector2(push, -slideSpeed);
+    }
+
+    private void Walk(Vector2 dir)
+    {
+        if (!canMove)
+            return;
+
+        if (wallGrab)
+            return;
+
+        if (!wallJumped)
+        {
+            rb.velocity = new Vector2(dir.x * speed, rb.velocity.y);
+        }
+        else
+        {
+            rb.velocity = Vector2.Lerp(rb.velocity, (new Vector2(dir.x * speed, rb.velocity.y)), wallJumpLerp * Time.deltaTime);
+        }
+    }
+
+    private void Jump(Vector2 dir, bool wall)
+    {
+        //slideParticle.transform.parent.localScale = new Vector3(ParticleSide(), 1, 1);
+        //ParticleSystem particle = wall ? wallJumpParticle : jumpParticle;
+
+        rb.velocity = new Vector2(rb.velocity.x, 0);
+        rb.velocity += dir * jumpForce;
+
+        //particle.Play();
+    }
+
+    IEnumerator DisableMovement(float time)
+    {
+        canMove = false;
+        yield return new WaitForSeconds(time);
+        canMove = true;
+    }
+
+    void RigidbodyDrag(float x)
+    {
+        rb.drag = x;
+    }
+
+    void WallParticle(float vertical)
+    {
+        var main = slideParticle.main;
+
+        if (wallSlide || (wallGrab && vertical < 0))
+        {
+            slideParticle.transform.parent.localScale = new Vector3(ParticleSide(), 1, 1);
+            main.startColor = Color.white;
+        }
+        else
+        {
+            main.startColor = Color.clear;
+        }
+    }
+
+    int ParticleSide()
+    {
+        int particleSide = coll.onRightWall ? 1 : -1;
+        return particleSide;
+    }
+    
+    private void PassThroughPlatform()
+    {
+        if (coll.onGround && Input.GetAxis("Vertical") < 0) // Si l'axe vertical est nÃ©gatif, cela signifie que le joueur appuie sur le bouton "down".
+        {
+            StartCoroutine(TempDisableCollider());
+        }
+    }
+
+    IEnumerator TempDisableCollider()
+    {
+        Debug.Log("Disable collider between " + playerLayer.value + " and " + platformLayer.value);
+        // Disable collisons for all platformLayer objects
+        Physics2D.IgnoreLayerCollision(playerLayer, platformLayer, true);
+        // Wait for 0.5 seconds
+        yield return new WaitForSeconds(0.2f);
+        // Enable collisions for all platformLayer objects
+        Physics2D.IgnoreLayerCollision(playerLayer, platformLayer, false); 
     }
 
 
