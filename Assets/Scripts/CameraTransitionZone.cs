@@ -1,10 +1,13 @@
 using Cinemachine;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public class CameraTransitionZone : MonoBehaviour
 {
+    public bool flipVertical;
+    public bool flipHorizontal;
+    
     [Header("Camera")] 
-    public bool isVertical;
     public Transform cameraTarget1;
     public Transform cameraTarget2;
     public CinemachineVirtualCamera virtualCamera;
@@ -18,19 +21,25 @@ public class CameraTransitionZone : MonoBehaviour
     {
         if (other.CompareTag("Player"))
         {
+            float playerX = playerTransform.position.x;
+            float playerY = playerTransform.position.y;
+            
+            Vector2 movePos = new Vector2(playerX + (flipVertical ? 0 : movementGap), playerY + (flipVertical ? movementGap : 0));
+            Vector2 moveNeg= new Vector2(playerX - (flipVertical ? 0 : movementGap), playerY - (flipVertical ? movementGap : 0));
+            
             if (virtualCamera.Follow == cameraTarget1)
             {
                 virtualCamera.Follow = cameraTarget2;
-            
+                
                 // Déplacez le joueur légèrement vers la droite (ou la direction que vous préférez)
-                playerTransform.position = new Vector2(playerTransform.position.x + (isVertical ? 0 : movementGap), playerTransform.position.y + (isVertical ? movementGap : 0));
+                playerTransform.position = flipHorizontal ? moveNeg : movePos;
             }
             else
             {
                 virtualCamera.Follow = cameraTarget1;
             
                 // Déplacez le joueur légèrement vers la gauche (ou la direction que vous préférez)
-                playerTransform.position = new Vector2(playerTransform.position.x - (isVertical ? 0 : movementGap), playerTransform.position.y - (isVertical ? movementGap : 0));
+                playerTransform.position = flipHorizontal ? movePos : moveNeg;
             }
         
             // Si vous voulez vous assurer que le joueur ne se déplace pas de manière inattendue en raison de sa vélocité, réinitialisez la vélocité
