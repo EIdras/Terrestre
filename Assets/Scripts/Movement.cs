@@ -1,4 +1,5 @@
 using System.Collections;
+using DG.Tweening;
 using UnityEngine;
 
 public class Movement : MonoBehaviour
@@ -40,6 +41,9 @@ public class Movement : MonoBehaviour
     public ParticleSystem jumpParticle;
     public ParticleSystem wallJumpParticle;
     public ParticleSystem slideParticle;
+    public GhostTrail ghostTrail;
+
+    private Vector3 originalParticlePosition;
 
     // Start is called before the first frame update
     void Start()
@@ -49,6 +53,7 @@ public class Movement : MonoBehaviour
         anim = GetComponentInChildren<AnimationScript>();
         platformLayer = LayerMask.NameToLayer("Platform");
         playerLayer = LayerMask.NameToLayer("Player");
+        originalParticlePosition = wallJumpParticle.transform.localPosition;
     }
 
     // Update is called once per frame
@@ -196,6 +201,9 @@ public class Movement : MonoBehaviour
 
     IEnumerator DashWait()
     {
+        ghostTrail.ShowGhost();
+        StartCoroutine(GroundDash());
+        
         dashParticle.Play();
         GetComponent<BetterJumping>().enabled = false;
         wallJumped = true;
@@ -277,14 +285,33 @@ public class Movement : MonoBehaviour
 
     private void Jump(Vector2 dir, bool wall)
     {
-        //slideParticle.transform.parent.localScale = new Vector3(ParticleSide(), 1, 1);
-        //ParticleSystem particle = wall ? wallJumpParticle : jumpParticle;
+        ParticleSystem particle = wall ? wallJumpParticle : jumpParticle;
 
         rb.velocity = new Vector2(rb.velocity.x, 0);
         rb.velocity += dir * jumpForce;
 
-        //particle.Play();
+        if (wall)
+        {
+            // Ajuster la position des particules
+            particle.transform.localPosition = originalParticlePosition + new Vector3(ParticleSide() * 0.45f, 0, 0);
+            particle.Play();
+
+            // Réinitialiser la position après un court délai
+            StartCoroutine(ResetParticlePosition(particle));
+        }
+        else
+        {
+            particle.Play();
+        }
     }
+    IEnumerator ResetParticlePosition(ParticleSystem particle)
+    {
+        // Attendre la fin de la frame pour que les particules aient le temps de s'émettre
+        yield return new WaitForEndOfFrame();
+        // Réinitialiser la position
+        particle.transform.localPosition = originalParticlePosition;
+    }
+
 
     IEnumerator DisableMovement(float time)
     {

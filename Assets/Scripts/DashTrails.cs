@@ -21,6 +21,7 @@ public class DashTrails : MonoBehaviour
 
     public void ShowGhost()
     {
+        Debug.Log("ShowGhost");
         Sequence s = DOTween.Sequence();
 
         for (int i = 0; i < ghostsParent.childCount; i++)

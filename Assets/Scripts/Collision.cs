@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class Collision : MonoBehaviour
 {
@@ -23,6 +24,10 @@ public class Collision : MonoBehaviour
     public float collisionRadius = 0.25f;
     public Vector2 bottomOffset, rightOffset, leftOffset;
     private Color debugCollisionColor = Color.red;
+    
+    [Space]
+    
+    public TimerController timerController;
 
     // Start is called before the first frame update
     void Start()
@@ -59,7 +64,15 @@ public class Collision : MonoBehaviour
     {
         if (other.gameObject.CompareTag("Finish")) // Assurez-vous que votre joueur a le tag "Player".
         {
-            Debug.Log("Le joueur a fini le niveau !");
+           EndLevel();
         }
+    }
+    
+    private void EndLevel()
+    {
+        timerController.StopTimer();
+        Debug.Log("Le joueur a fini le niveau !");
+        // On charge le menu principal
+        SceneManager.LoadScene(0);
     }
 }

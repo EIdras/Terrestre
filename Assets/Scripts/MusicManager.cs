@@ -4,7 +4,7 @@ public class MusicManager : MonoBehaviour
 {
     private void Start()
     {
-        AudioSource audioSource = GetComponent<AudioSource>();
+        AudioSource audioSource = GetComponentInChildren<AudioSource>();
         if (audioSource != null)
         {
             // Appliquer le volume enregistré à l'AudioSource
