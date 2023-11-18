@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class Collision : MonoBehaviour
@@ -52,5 +53,13 @@ public class Collision : MonoBehaviour
         Gizmos.DrawWireSphere((Vector2)transform.position  + bottomOffset, collisionRadius);
         Gizmos.DrawWireSphere((Vector2)transform.position + rightOffset, collisionRadius);
         Gizmos.DrawWireSphere((Vector2)transform.position + leftOffset, collisionRadius);
+    }
+
+    private void OnCollisionEnter2D(Collision2D other)
+    {
+        if (other.gameObject.CompareTag("Finish")) // Assurez-vous que votre joueur a le tag "Player".
+        {
+            Debug.Log("Le joueur a fini le niveau !");
+        }
     }
 }
