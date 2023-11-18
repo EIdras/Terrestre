@@ -24,10 +24,12 @@ public class TimerController : MonoBehaviour
         timerActive = false;
 
         // Enregistrer le temps dans PlayerPrefs (si il est meilleur que le temps actuel)
-        float actualBestTime = PlayerPrefs.GetFloat("LevelTime", 0);
-        if (actualBestTime == 0 || Time.time - startTime < actualBestTime)
+        float actualBestTime = PlayerPrefs.GetFloat("Level1Time", 0);
+        float finalTime = Time.time - startTime;
+        Debug.Log("Comparing " + finalTime + " to " + actualBestTime);
+        if (actualBestTime == 0 || finalTime < actualBestTime)
         {
-            PlayerPrefs.SetFloat("LevelTime", Time.time - startTime);
+            PlayerPrefs.SetFloat("Level1Time", finalTime);
             PlayerPrefs.Save();
         }
     }
